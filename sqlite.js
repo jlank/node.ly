@@ -44,7 +44,7 @@ exports.openDatabaseSync = function (name, version, displayName,
   var db = new DatabaseSync(name);
   if (creationCallback) creationCallback(db);
   return db;
-}
+};
 
 
 DatabaseSync.prototype.query = function (sql, bindings, callback) {
@@ -102,7 +102,7 @@ DatabaseSync.prototype.query = function (sql, bindings, callback) {
     callback.apply(result, all);
   }
   return result;
-}
+};
 
 
 
@@ -123,7 +123,7 @@ function SQLTransactionSync(db, txCallback, errCallback, successCallback) {
       callback.apply(result, [tx].concat(result.all));
     }
     return result;
-  }
+  };
 
   var that = this;
   function unroll() {
@@ -147,7 +147,7 @@ DatabaseSync.prototype.transaction = function (txCallback, errCallback,
                                                successCallback) {
   var tx = new SQLTransactionSync(this, txCallback, 
                                   errCallback, successCallback);
-}
+};
 
 // TODO: readTransaction()
 
