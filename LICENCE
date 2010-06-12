@@ -15,8 +15,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -------------------------------------------------------------------------------
 
-node.ly uses sqlite.js and sqlite3_bindings.node, which are copyright 
-(c) 2009, Eric Fredricksen <e@fredricksen.net>
+sqlite.js and sqlite3_bindings.node belong to the node-sqlite project 
+http://code.google.com/p/node-sqlite/ that is copyright 
+(c) 2009, Eric Fredricksen <e@fredricksen.net>, released under the MIT 
+Licence, hereby reported.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
