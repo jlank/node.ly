@@ -21,32 +21,6 @@ var SYS = require("sys"), HTTP = require("http");
 var COM_GIACECCO_TOOLS = require("./com_giacecco_tools");
 var SQLITE3 = require("./sqlite"); // node-sqlite is courtesy of http://grumdrig.com/node-sqlite/ 
 
-/* = Note on Node.ly short URLs length and file size =
- * 
- * Experimentally, the data required to store 10,000 worst-case-scenario 
- * URLs is 23,224,320 bytes (see MAX_URL_LENGTH below).
- *  
- * SQLite 3's theoretical max database size is 2 TB (see
- * http://www.sqlite.org/whentouse.html ). 
- * 
- * If my calculation below is right...
- * 
- * Length of short URL	Max no. of short URLs	Projected file size (circa)
- * 2					5,329					12 MB
- * 3					389,017					861 MB
- * 4					28,398,241				61 GB
- * 5					2,073,071,593			4 TB
- * (...)
- * 
- * ... it is clear that I can't use SQLite 3 for short URLs beyond 4
- * characters. With more than 28M URLs supported, I may not be too sad though.
- * 
- * Someone may also want to consider the max size of files on your operating
- * system / file system combination. I work on MacOS 10.6.x , which gives me 
- * almost 8 EB of max file size! 
- * (http://support.apple.com/kb/HT2422?viewlocale=en_US)
- */
-
 // TODO: is the line below the best way of doing this? if I returned 
 // MAX_URL_LENGTH directly, would the calling procedure be able to 
 // change it? 
@@ -153,27 +127,35 @@ exports.shortener = function() {
 	// unless a different HTTP port is specified
 	var CreateServer = function(port) {
 		HTTP.createServer(function (request, response) {
-			requestComponents = require('url').parse(request.url, true);
-			if((typeof(requestComponents["query"]) == "undefined") && (requestComponents["pathname"].length == (SHORTENED_URL_LENGTH + 1))) {
-				// the web browser is requesting to resolve a short URL
-				// http://en.wikipedia.org/wiki/URL_redirection
-				response.writeHead(
-					302, { 
+			var requestComponents = require('url').parse(request.url, true);
+			require("./com_giacecco_tools").SwitchRegExp(requestComponents['href'], [
+
+                // The web browser is requesting to resolve a short URL.
+				[ new RegExp("^\/(.{" + SHORTENED_URL_LENGTH + "})$") , function() { 
+					// There is a very interesting article about the choice of		                                                                             
+					// the actual HTTP return code at 
+					// http://www.google.com/buzz/dclinton/JKoWPTAAyvw/More-thoughts-on-URL-shorteners-This-post-explores
+					response.writeHead(302, { 
 						'Content-Type': 'text/plain', 
 						'Location' : RetrieveSync(requestComponents["pathname"].substring(1, requestComponents["pathname"].length))
 					});
-				response.end();
-			} else 
-				switch(requestComponents["pathname"]) {
-				case "/shorten":
-					// this is the shortest form to request to shorten an 
-					// URL, to be used as it was an API 
+					response.end();
+				}],
+
+				// This is the shortest form to request node.ly to shorten an 
+				// URL, to be used as if it was an API 
+				[ /^\/shorten\?/ , function() {
 					response.writeHead(200, {'Content-Type': 'text/plain'});
-					response.end(ShortenSync(requestComponents["query"]["URL"]));
-				default:
+					response.end(ShortenSync(requestComponents["query"]["URL"]));						
+				}], 
+
+				// everything else
+				[ /^\/.*/ , function() {
 					response.writeHead(200, {'Content-Type': 'text/plain'});
 					response.end('Hello World\n');
-				};
+				}]
+				
+			]);
 		}).listen(port || 8000);
 	};
 	
@@ -202,14 +184,14 @@ exports.shortener = function() {
 
 		// the file does not exist, I can proceed
 		
-		// this is just your choice, really...
-		SHORTENED_URL_LENGTH = arguments[0];
-		if(typeof(SHORTENED_URL_LENGTH) == "undefined") SHORTENED_URL_LENGTH = 4;
-		
-		ALLOWED_CHARACTERS = arguments[1];
-		if(typeof(ALLOWED_CHARACTERS) == "undefined") ALLOWED_CHARACTERS = this.RFC_ALLOWED_CHARACTERS;
+		// The default values for these are just your choice, really, as long
+		// as they are compatible with the database max possible size (check
+		// calculations on the Wiki)
+		SHORTENED_URL_LENGTH = arguments[0] || 4;
+		ALLOWED_CHARACTERS = arguments[1] || this.RFC_ALLOWED_CHARACTERS;
 
-		// A very conservative check on the potential size of the URL database...
+		// A very conservative check on the potential size of the URL database.
+		// See http://wiki.github.com/giacecco/node.ly/about-file-size-limitations-and-the-max-no-of-short-urls-i-can-store
 		if(Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH) * 2322 >= Math.pow(2, 41))
 			throw new Error("The URL database you are trying to create is too big. Try narrowing the set of allowed characters or the length of the short URLs.");
 		

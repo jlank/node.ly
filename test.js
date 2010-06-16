@@ -54,3 +54,4 @@ var TestMaxDatabaseSize = function(referenceToShortener, nrOfURLs) {
 var pippo = new LY_NODE_SHORTENER.shortener("test");
 //CreateRandomData(pippo, 100, 50);
 pippo.CreateServer();
+

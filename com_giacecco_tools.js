@@ -17,7 +17,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var FILESYS = require("fs");
+var SYS = require("sys"), FILESYS = require("fs");
 
 exports.FileExistsSync = function(filename) {
 	var fileExists = true;
@@ -57,4 +57,17 @@ exports.BaseConversion = function(baseSymbols) {
 		"FromBase": FromBase
 	};
 	
+};
+
+/* Similar to switch-case, but matching a string against a series of regular
+ * expressions. */
+exports.SwitchRegExp = function(stringToBeMatched, arrayOfInstructions) {
+	var matching;
+	for(var i in arrayOfInstructions) {
+		if(matching = stringToBeMatched.match(arrayOfInstructions[i][0])) {
+			arrayOfInstructions[i][1](matching);
+			break;
+		};
+	};
+	return matching;
 };
