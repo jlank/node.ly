@@ -127,26 +127,25 @@ exports.shortener = function() {
 	// unless a different HTTP port is specified
 	var CreateServer = function(port) {
 		HTTP.createServer(function (request, response) {
-			var requestComponents = require('url').parse(request.url, true);
-			require("./com_giacecco_tools").SwitchRegExp(requestComponents['href'], [
+			require("./com_giacecco_tools").SwitchRegExp(require('url').parse(request.url)['href'], [
 
                 // The web browser is requesting to resolve a short URL.
-				[ new RegExp("^\/(.{" + SHORTENED_URL_LENGTH + "})$") , function() { 
+				[ new RegExp("^\/(.{" + SHORTENED_URL_LENGTH + "})$") , function(matches) { 
 					// There is a very interesting article about the choice of		                                                                             
 					// the actual HTTP return code at 
 					// http://www.google.com/buzz/dclinton/JKoWPTAAyvw/More-thoughts-on-URL-shorteners-This-post-explores
 					response.writeHead(302, { 
 						'Content-Type': 'text/plain', 
-						'Location' : RetrieveSync(requestComponents["pathname"].substring(1, requestComponents["pathname"].length))
+						'Location' : RetrieveSync(matches[1]) // careful here, matches[0] is the whole URL, not the parenthesised expressions!
 					});
 					response.end();
 				}],
 
 				// This is the shortest form to request node.ly to shorten an 
 				// URL, to be used as if it was an API 
-				[ /^\/shorten\?/ , function() {
+				[ /^\/shorten\?URL=(.*)$/ , function(matches) {
 					response.writeHead(200, {'Content-Type': 'text/plain'});
-					response.end(ShortenSync(requestComponents["query"]["URL"]));						
+					response.end(ShortenSync(matches[1]));						
 				}], 
 
 				// everything else

@@ -60,7 +60,7 @@ exports.BaseConversion = function(baseSymbols) {
 };
 
 /* Similar to switch-case, but matching a string against a series of regular
- * expressions. */
+ * expressions, and without a 'default' clause. */
 exports.SwitchRegExp = function(stringToBeMatched, arrayOfInstructions) {
 	var matching;
 	for(var i in arrayOfInstructions) {
