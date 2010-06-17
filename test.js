@@ -48,10 +48,8 @@ var TestMaxDatabaseSize = function(referenceToShortener, nrOfURLs) {
 		referenceToShortener.ShortenSync(GenerateRandomString(LY_NODE_SHORTENER.MAX_URL_LENGTH, LY_NODE_SHORTENER.RFC_ALLOWED_CHARACTERS));		
 };
 
-// TODO: I should do some testing of writing and reading lots of URLs and check
-// how speed goes
+
 //var pippo = new LY_NODE_SHORTENER.shortener(4, LY_NODE_SHORTENER.RFC_ALLOWED_CHARACTERS, "test");
 var pippo = new LY_NODE_SHORTENER.shortener("test");
 //CreateRandomData(pippo, 100, 50);
-pippo.CreateServer();
 

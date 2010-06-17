@@ -17,13 +17,10 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var SYS = require("sys"), HTTP = require("http");
+var SYS = require("sys");
 var COM_GIACECCO_TOOLS = require("./com_giacecco_tools");
 var SQLITE3 = require("./sqlite"); // node-sqlite is courtesy of http://grumdrig.com/node-sqlite/ 
 
-// TODO: is the line below the best way of doing this? if I returned 
-// MAX_URL_LENGTH directly, would the calling procedure be able to 
-// change it? 
 exports.RFC_ALLOWED_CHARACTERS = function() {
 	// According to http://www.rfc-editor.org/rfc/rfc1738.txt the following is 
 	// the list of characters that can be used in an URL
@@ -37,14 +34,13 @@ exports.MAX_URL_LENGTH = function() {
 	return 2083;
 }();
 
+exports.NODE_LY_FILE_EXTENSION = function() { return ".nodely"; }();
+
 /* Two possible signatures for the constructor:
  * 1) (shortenedURLLength, allowedCharacters, filenameWithoutExtension) to create a new file
  * 2) (filenameWithoutExtension) to open an existing one; if the file does not exist, a new
  *    one is created with default settings */
 exports.shortener = function() {
-
-	// constants	
-	var NODE_LY_FILE_EXTENSION = ".nodely";
 
 	// variables
 	var db, SHORTENED_URL_LENGTH, ALLOWED_CHARACTERS, MAX_ENCODABLE_NUMBER;
@@ -68,9 +64,12 @@ exports.shortener = function() {
 	 * node-sqlite uses SQLite's serialised threading mode. */
 	var ShortenSync = function(fullURL) {
 		if(fullURL.length > this.MAX_URL_LENGTH)
-			throw new Error("The length of the URL you are trying to shorten is not supported.");
+			throw new Error("The length of the URL you are trying to shorten is not supported.");		
+		if(!fullURL.match(/^.*:\/\//))
+			fullURL = "http://" + fullURL;
 		/* TODO: lower any character of fullURL that should not be case 
 		 * sensitive, e.g. the protocol enunciation. */
+		// TODO: check that the URL is well formed
 		var nextId, shortURL, lastAccessed = (new Date()).valueOf();
 		var q = db.query("select * from URLs where fullURL = ?", [fullURL]);
 		if(q.all[0].length > 0) {
@@ -122,41 +121,6 @@ exports.shortener = function() {
 		db.query("update URLs set nrOfAccesses = ?, lastAccessed = ? where shortURL = ?;", [ q.all[0][0]["nrOfAccesses"] + 1, lastAccessed, shortURL ]);
 		return q.all[0][0]["fullURL"];
 	};
-
-	// starts a basic web site to access the shortener on port 8000,
-	// unless a different HTTP port is specified
-	var CreateServer = function(port) {
-		HTTP.createServer(function (request, response) {
-			require("./com_giacecco_tools").SwitchRegExp(require('url').parse(request.url)['href'], [
-
-                // The web browser is requesting to resolve a short URL.
-				[ new RegExp("^\/(.{" + SHORTENED_URL_LENGTH + "})$") , function(matches) { 
-					// There is a very interesting article about the choice of		                                                                             
-					// the actual HTTP return code at 
-					// http://www.google.com/buzz/dclinton/JKoWPTAAyvw/More-thoughts-on-URL-shorteners-This-post-explores
-					response.writeHead(302, { 
-						'Content-Type': 'text/plain', 
-						'Location' : RetrieveSync(matches[1]) // careful here, matches[0] is the whole URL, not the parenthesised expressions!
-					});
-					response.end();
-				}],
-
-				// This is the shortest form to request node.ly to shorten an 
-				// URL, to be used as if it was an API 
-				[ /^\/shorten\?URL=(.*)$/ , function(matches) {
-					response.writeHead(200, {'Content-Type': 'text/plain'});
-					response.end(ShortenSync(matches[1]));						
-				}], 
-
-				// everything else
-				[ /^\/.*/ , function() {
-					response.writeHead(200, {'Content-Type': 'text/plain'});
-					response.end('Hello World\n');
-				}]
-				
-			]);
-		}).listen(port || 8000);
-	};
 	
 	// the actual constructor instructions start here
 	
@@ -165,11 +129,11 @@ exports.shortener = function() {
 	case 1: // the user's trying to open an existing file
 		
 		// the file does not exist, I shall abort..
-		if(!COM_GIACECCO_TOOLS.FileExistsSync(arguments[0] + NODE_LY_FILE_EXTENSION)) 
+		if(!COM_GIACECCO_TOOLS.FileExistsSync(arguments[0] + require("./ly_node_common").NODE_LY_FILE_EXTENSION)) 
 			throw new Error("You are trying to open a file that does not exist.");
 		
 		// the file exists, I read it
-		db = SQLITE3.openDatabaseSync(arguments[0] + NODE_LY_FILE_EXTENSION);
+		db = SQLITE3.openDatabaseSync(arguments[0] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); 
 		var temp = JSON.parse(db.query("SELECT json FROM Meta;").all[0][0]["json"]);
 		ALLOWED_CHARACTERS = temp["ALLOWED_CHARACTERS"];
 		SHORTENED_URL_LENGTH = temp["SHORTENED_URL_LENGTH"];
@@ -178,7 +142,7 @@ exports.shortener = function() {
 	case 3: // the user's trying to create a new file
 				
 		// the file exists already! I shall abort...
-		if(COM_GIACECCO_TOOLS.FileExistsSync(arguments[2] + NODE_LY_FILE_EXTENSION)) 
+		if(COM_GIACECCO_TOOLS.FileExistsSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION)) 
 			throw new Error("You are trying to create a file that exists already.");
 
 		// the file does not exist, I can proceed
@@ -187,7 +151,7 @@ exports.shortener = function() {
 		// as they are compatible with the database max possible size (check
 		// calculations on the Wiki)
 		SHORTENED_URL_LENGTH = arguments[0] || 4;
-		ALLOWED_CHARACTERS = arguments[1] || this.RFC_ALLOWED_CHARACTERS;
+		ALLOWED_CHARACTERS = arguments[1] || require("./ly_node_common").RFC_ALLOWED_CHARACTERS;  
 
 		// A very conservative check on the potential size of the URL database.
 		// See http://wiki.github.com/giacecco/node.ly/about-file-size-limitations-and-the-max-no-of-short-urls-i-can-store
@@ -195,7 +159,7 @@ exports.shortener = function() {
 			throw new Error("The URL database you are trying to create is too big. Try narrowing the set of allowed characters or the length of the short URLs.");
 		
 		// I create the file
-		db = SQLITE3.openDatabaseSync(arguments[2] + NODE_LY_FILE_EXTENSION);
+		db = SQLITE3.openDatabaseSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); // TODO: this probably is not working
 		db.query("CREATE TABLE URLs(shortURL TEXT PRIMARY KEY ASC, id INTEGER, fullURL TEXT, nrOfAccesses INTEGER, lastAccessed INTEGER, lastUpdated INTEGER);");
 		db.query("CREATE TABLE Meta (json TEXT);");
 		db.query("INSERT INTO Meta (json) VALUES (?)", [JSON.stringify({
@@ -211,9 +175,10 @@ exports.shortener = function() {
 	};
 	MAX_ENCODABLE_NUMBER = Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH);
 	return {
+		"SHORTENED_URL_LENGTH"   : function() { return SHORTENED_URL_LENGTH; }(),
+		"ALLOWED_CHARACTERS"     : function() { return ALLOWED_CHARACTERS; }(),
 		"ShortenSync"            : ShortenSync,
-		"RetrieveSync"           : RetrieveSync,
-		"CreateServer"           : CreateServer
+		"RetrieveSync"           : RetrieveSync
 	};
 	
 };
