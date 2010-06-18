@@ -1,1 +1,72 @@
-Testing that GitHub works.
+/*   
+ * node.ly - A node.js library to implement your own URL shortener, 
+ * inspired by Bit.ly 
+ * Copyright (C) 2010 Gianfranco Cecconi <giacecco@giacec.co.uk>
+ * http://github.com/giacecco/node.ly
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+node.ly version 1.0, 18th June 2010
+ 
+node.ly is a little but cute programming exercise to put the gorgeous 
+node.js ( http://nodejs.org ) to the test. It's nothing but a library of <200
+original lines of code that allows you to implement an URL shortener,
+offering a basic subset of functionality that are:
+ 
+- shortening a proper URL into a short URL 
+- retrieving the proper URL from the short URL
+- storing permanently all URLs until you 'run out of space' (see
+http://wiki.github.com/giacecco/node.ly/about-file-size-limitations-and-the-max-no-of-short-urls-i-can-store ), 
+then start reusing the less successful short URLs (e.g. the ones end users don't 
+look to be interested in).
+ 
+node.ly comes with example code for a web server offering shortening and 
+retrieval functionality. Just launch server-example.js and you're done.
+
+This version of node.ly is not designed to heavily rely on asynchronous
+function callbacks, as most of node.js standard and custom libraries are 
+instead. Libraries such as node-sqlite upon which I relied are not async-aware 
+yet, too, hence it felt a little to early for me to invest effort in that 
+direction.
+
+SETUP
+ 
+node.ly has been developed using node.js version 0.1.98 and sqlite3 version
+3.6.23.1 on MacOS 10.6.4 . I don't expect issues on other POSIX-compatible**** 
+operating systems node.js and sqlite3 are or will be ported to.
+
+node.ly's only prerequisites are then sqlite3 http://www.sqlite.org and 
+node-sqlite http://grumdrig.com/node-sqlite/ : another open source project 
+bringing sqlite3 to node.js. I used a version I downloaded from the project web 
+site on 7th June 2010, which required some fiddling before it could be compiled. 
+Read their issue register at http://code.google.com/p/node-sqlite/issues/list
+to find out how to manage to compile.
+
+The easiest way to use node.ly from your code is to just copy the following four
+files in the same folder as your node.js scripts:
+
+ly_node_common.js
+com_giacecco_tools.js
+sqlite.js (from node-sqlite)
+sqlite3_bindings.node (from node-sqlite's make, compiled for your system)
+
+HOW TO CONTRIBUTE
+
+Drop me an email and let's talk about it! I've left a few TODOs in the code I 
+would welcome friends to fix.
+
+LICENSING
+
+Read the LICENCE file for full licensing information.
