@@ -58,10 +58,26 @@ var CreateServer = function(shortener, port) {
 };
 
 var SYS = require("sys");
-var LY_NODE_SHORTENER = new require("./ly_node_common"); 
-var shortener, databaseName = "test";
-if(!require("./com_giacecco_tools").FileExistsSync(databaseName + LY_NODE_SHORTENER.NODE_LY_FILE_EXTENSION))
-	shortener = new LY_NODE_SHORTENER.shortener(4, LY_NODE_SHORTENER.RFC_ALLOWED_CHARACTERS, databaseName);
-else
-	shortener = new LY_NODE_SHORTENER.shortener(databaseName);
-SYS.puts("Starting server on port " + CreateServer(shortener, 8000) + "...");
+var LY_NODE = new require("./ly_node_common"); 
+var databaseName = "test";
+LY_NODE.databaseExists(undefined, undefined, databaseName, 
+	function(err, dbExists) {
+		if(dbExists) {
+			LY_NODE.createShortener(undefined, undefined, "test",
+									function(err, s) { 
+										if(err) 
+											throw err;
+										else 
+											SYS.puts("Starting server on port " + CreateServer(s, 8000) + "...");
+									});
+		} else {
+			LY_NODE.createShortener(4, LY_NODE.RFC_ALLOWED_CHARACTERS, 
+									undefined, undefined, "test", 
+									function(err, s) { 
+										if(err) 
+											throw err;
+										else 
+											SYS.puts("Starting server on port " + CreateServer(s, 8000) + "...");
+									});
+		};
+	});

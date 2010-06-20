@@ -17,9 +17,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var LY_NODE_SHORTENER = new require("./ly_node_common"); 
-var SYS = require("sys");
-
 var GenerateRandomString = function(stringLength, allowedCharacters) {
 	for(var result = ""; result.length < stringLength; result += allowedCharacters[Math.floor(Math.random() * allowedCharacters.length)]) {};
 	return result;
@@ -48,8 +45,26 @@ var TestMaxDatabaseSize = function(referenceToShortener, nrOfURLs) {
 		referenceToShortener.ShortenSync(GenerateRandomString(LY_NODE_SHORTENER.MAX_URL_LENGTH, LY_NODE_SHORTENER.RFC_ALLOWED_CHARACTERS));		
 };
 
-
-//var pippo = new LY_NODE_SHORTENER.shortener(4, LY_NODE_SHORTENER.RFC_ALLOWED_CHARACTERS, "test");
-var pippo = new LY_NODE_SHORTENER.shortener("test");
-//CreateRandomData(pippo, 100, 50);
+var LY_NODE = new require("./ly_node_common"); 
+var SYS = require("sys");
+var pippo;
+LY_NODE.databaseExists(undefined, undefined, "test", function(err, dbExists) {
+	if(dbExists) {
+		LY_NODE.createShortener(undefined, undefined, "test",
+				function(err, shortener) { 
+					if(err) 
+						throw err;
+					else 
+						pippo = shortener; 
+		});
+	} else {
+		LY_NODE.createShortener(4, LY_NODE.RFC_ALLOWED_CHARACTERS, 
+								undefined, undefined, "test", 
+								function(err, shortener) { 
+									if(err) 
+										throw err;
+									else 
+										pippo = shortener; 
+								});
+	}});
 

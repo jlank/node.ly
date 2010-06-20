@@ -20,7 +20,7 @@
 
 var SYS = require("sys");
 var COM_GIACECCO_TOOLS = require("./com_giacecco_tools");
-var SQLITE3 = require("./sqlite"); // node-sqlite is courtesy of http://grumdrig.com/node-sqlite/ 
+var COUCHDB = require("./lib/couchdb"); 
 
 exports.RFC_ALLOWED_CHARACTERS = function() {
 	// According to http://www.rfc-editor.org/rfc/rfc1738.txt the following is 
@@ -35,16 +35,21 @@ exports.MAX_URL_LENGTH = function() {
 	return 2083;
 }();
 
-exports.NODE_LY_FILE_EXTENSION = function() { return ".nodely"; }();
+exports.NODE_LY_DATABASE_EXTENSION = function() { return "-nodely"; }();
+
+exports.databaseExists = function(host, port, name, callbackFunction) {
+	var couchdbClient = COUCHDB.createClient(port || 5984, host || "localhost");
+	var couchdbDb = couchdbClient.db(name + require("./ly_node_common").NODE_LY_DATABASE_EXTENSION);
+	couchdbDb.exists(function(err, dbExists) {
+		callbackFunction(err, dbExists);
+	});
+};
 
 /* Two possible signatures for the constructor:
- * 1) (shortenedURLLength, allowedCharacters, filenameWithoutExtension) to create a new file
- * 2) (filenameWithoutExtension) to open an existing one; if the file does not exist, a new
- *    one is created with default settings */
-exports.shortener = function() {
-
-	// variables
-	var db, SHORTENED_URL_LENGTH, ALLOWED_CHARACTERS, MAX_ENCODABLE_NUMBER;
+ * 1) (shortenedURLLength, allowedCharacters, host, port, databaseName, 
+ *    callback) to create a new database
+ * 2) (host, port, databaseName, callback) to open an existing one */
+exports.createShortener = function() {
 	
 	// Like ToBase / FromBase, where the base is the list of characters that 
 	// are allowed in an URL
@@ -125,41 +130,78 @@ exports.shortener = function() {
 	
 	// the actual constructor instructions start here
 	
+	// variables
+	var callbackFunction, couchdbClient, couchdbDb, SHORTENED_URL_LENGTH, ALLOWED_CHARACTERS, MAX_ENCODABLE_NUMBER;
+	couchdbClient = COUCHDB.createClient(arguments[3] || 5984, arguments[2] || "localhost");
 	switch(arguments.length) {
 	
-	case 1: // the user's trying to open an existing file
-		
-		// the file does not exist, I shall abort..
-		if(!COM_GIACECCO_TOOLS.FileExistsSync(arguments[0] + require("./ly_node_common").NODE_LY_FILE_EXTENSION)) 
-			throw new Error("You are trying to open a file that does not exist.");
-		
-		// the file exists, I read it
-		db = SQLITE3.openDatabaseSync(arguments[0] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); 
-		var temp = JSON.parse(db.query("SELECT json FROM Meta;").all[0][0]["json"]);
-		ALLOWED_CHARACTERS = temp["ALLOWED_CHARACTERS"];
-		SHORTENED_URL_LENGTH = temp["SHORTENED_URL_LENGTH"];
+	case 4: // the user's trying to refer to an existing database
+
+		callbackFunction = arguments[3];
+
+		couchdbDb = couchdbClient.db(arguments[2] + require("./ly_node_common").NODE_LY_DATABASE_EXTENSION);
+		couchdbDb.exists(function(err, dbExists) {
+			if(!dbExists) 
+				callbackFunction(new Error("You are trying to open a node.ly database that does not exist."));
+			else {
+				// the file exists, I read it
+				couchdbDb.getDoc("Meta", function(err, doc) {
+					if(!err) {
+						ALLOWED_CHARACTERS = doc["ALLOWED_CHARACTERS"];
+						SHORTENED_URL_LENGTH = doc["SHORTENED_URL_LENGTH"];
+						MAX_ENCODABLE_NUMBER = Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH);
+						callbackFunction(null, {
+							"SHORTENED_URL_LENGTH"   : function() { return SHORTENED_URL_LENGTH; }(),
+							"ALLOWED_CHARACTERS"     : function() { return ALLOWED_CHARACTERS; }(),
+							"ShortenSync"            : ShortenSync,
+							"RetrieveSync"           : RetrieveSync
+						});
+					} else 
+						callbackFunction(new Error("The database name exists but it looks like it is not a node.ly database."));
+				});
+			}});
 		break;
 		
-	case 3: // the user's trying to create a new file
-				
-		// the file exists already! I shall abort...
-		if(COM_GIACECCO_TOOLS.FileExistsSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION)) 
-			throw new Error("You are trying to create a file that exists already.");
+	case 6: // the user's trying to create a new database
 
-		// the file does not exist, I can proceed
-		
-		// The default values for these are just your choice, really, as long
-		// as they are compatible with the database max possible size (check
-		// calculations on the Wiki)
+		callbackFunction = arguments[5];
+
+		/* The default values for these are just your choice, really, as 
+		 * long as they are compatible with the database max possible 
+		 * size (check calculations on the Wiki) */
 		SHORTENED_URL_LENGTH = arguments[0] || 4;
 		ALLOWED_CHARACTERS = arguments[1] || require("./ly_node_common").RFC_ALLOWED_CHARACTERS;  
 
-		// A very conservative check on the potential size of the URL database.
-		// See http://wiki.github.com/giacecco/node.ly/about-file-size-limitations-and-the-max-no-of-short-urls-i-can-store
+		/* A very conservative check on the potential size of the URL 
+		 * database. */
+		// TODO: this should be rewritten for CouchDB
 		if(Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH) * 2322 >= Math.pow(2, 41))
-			throw new Error("The URL database you are trying to create is too big. Try narrowing the set of allowed characters or the length of the short URLs.");
+			callbackFunction(new Error("The URL database you are trying to create is too big. Try narrowing the set of allowed characters or the length of the short URLs."));
+
+		couchdbDb = couchdbClient.db(arguments[4] + require("./ly_node_common").NODE_LY_DATABASE_EXTENSION);
+		couchdbDb.exists(function(er, dbExists) {
+			if(dbExists) {
+				callbackFunction(new Error("You are trying to create a database that exists already."));
+			} else {
+				// the database does not exist, I can proceed
+				couchdbDb.create(function() {
+					couchdbDb.saveDoc('Meta', { 
+						"ALLOWED_CHARACTERS"   : ALLOWED_CHARACTERS,
+						"SHORTENED_URL_LENGTH" : SHORTENED_URL_LENGTH
+					});
+					MAX_ENCODABLE_NUMBER = Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH);
+					callbackFunction(null, {
+						"SHORTENED_URL_LENGTH"   : function() { return SHORTENED_URL_LENGTH; }(),
+						"ALLOWED_CHARACTERS"     : function() { return ALLOWED_CHARACTERS; }(),
+						"ShortenSync"            : ShortenSync,
+						"RetrieveSync"           : RetrieveSync
+					});				
+				});
+			};
+		});
 		
 		// I create the file
+		/*
 		db = SQLITE3.openDatabaseSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); // TODO: this probably is not working
 		db.query("CREATE TABLE URLs(shortURL TEXT PRIMARY KEY ASC, id INTEGER, fullURL TEXT, nrOfAccesses INTEGER, lastAccessed INTEGER, lastUpdated INTEGER);");
 		db.query("CREATE TABLE Meta (json TEXT);");
@@ -167,19 +209,13 @@ exports.shortener = function() {
 			"ALLOWED_CHARACTERS"   : ALLOWED_CHARACTERS,
 			"SHORTENED_URL_LENGTH" : SHORTENED_URL_LENGTH
 		})]);
+		*/
 		break;
 		
 	default: // wrong number of parameters in the constructor
 		
 		throw new Error("You are trying to create a shortener object with the wrong number of parameters.");
 		
-	};
-	MAX_ENCODABLE_NUMBER = Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH);
-	return {
-		"SHORTENED_URL_LENGTH"   : function() { return SHORTENED_URL_LENGTH; }(),
-		"ALLOWED_CHARACTERS"     : function() { return ALLOWED_CHARACTERS; }(),
-		"ShortenSync"            : ShortenSync,
-		"RetrieveSync"           : RetrieveSync
 	};
 	
 };
