@@ -20,6 +20,26 @@
 
 var SYS = require("sys"), FILESYS = require("fs");
 
+exports.Crockford = function() {
+	
+	/* This function extends Javascript by leveraging some of the tricks
+	 * described by Douglas Crockford in his book "Javascript: The Good Parts", 
+	 * O'Reilly/Yahoo! Press 2008
+	 */
+	
+	/* Here I extend Javascript's standard functions to easily 'curry' them
+	 */
+	Function.prototype["curry"] = function() {
+		var slice = Array.prototype.slice,
+			args = slice.apply(arguments),
+			that = this;
+		return function() {
+				return that.apply(null, args.concat(slice.apply(arguments)));
+			};
+	};
+	
+};
+
 exports.FileExistsSync = function(filename) {
 	var fileExists = true;
 	try {

@@ -66,66 +66,84 @@ exports.createShortener = function() {
 		return new COM_GIACECCO_TOOLS.BaseConversion(ALLOWED_CHARACTERS).FromBase(s);
 	};
 
-	/* Apparently I do not need to worry about race conditions, because
-	 * node-sqlite uses SQLite's serialised threading mode. */
-	var ShortenSync = function(fullURL) {
-		if(fullURL.length > this.MAX_URL_LENGTH)
+	var Shorten = function(fullURL, cb) {
+		var tempDoc, lastAccessed = (new Date()).valueOf(), topShortURLno;
+		// I first check if the full URL is too long
+		if(fullURL.length > this.MAX_URL_LENGTH) // TODO: does this really work?
 			throw new Error("The length of the URL you are trying to shorten is not supported.");		
+		// then I check if the trailing protocol specification is there
 		if(!fullURL.match(/^.*:\/\//))
 			fullURL = "http://" + fullURL;
 		/* TODO: lower any character of fullURL that should not be case 
 		 * sensitive, e.g. the protocol enunciation. */
 		// TODO: check that the URL is well formed
-		var nextId, shortURL, lastAccessed = (new Date()).valueOf();
-		var q = db.query("select * from URLs where fullURL = ?", [fullURL]);
-		if(q.all[0].length > 0) {
-			// the URL has been shortened before
-			shortURL = q.all[0][0]["shortURL"];
-			db.query("update URLs set nrOfAccesses = ?, lastAccessed = ? where shortURL = ?;", [ q.all[0][0]["nrOfAccesses"] + 1, lastAccessed, shortURL]);
-		} else {
-			// the URL has NOT been shortened before
-			q = db.query("select max(id) as maxId from URLs;");
-			if(typeof(q.all[0][0]["maxId"]) == "undefined") {
-				// the cache is empty
-				nextId = 0;
-			} else {
-				nextId = q.all[0][0]["maxId"];
-				if(nextId < Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH) - 1) {
-					// there is unused space in the cache
-					nextId++;
+		couchdbDb.request("/_design/general/_view/shortURLs", { "key" : fullURL }, function(err, result) {
+			if(!err) { // TODO: I may want to process these error sooner or later
+				if(result.rows.length > 0) {
+					// the short URL exists already, I fetch its document
+					tempDoc = result.rows[0].value; // there mustn't be more than one
+					// then I update its properties
+					tempDoc.lastAccessed = lastAccessed;				
+					if(tempDoc.nrOfAccesses)
+						tempDoc.nrOfAccesses++;
+					else
+						tempDoc.nrOfAccesses = 1;
+					// and save it back
+					couchdbDb.saveDoc(tempDoc._id, tempDoc);
+					cb(null, tempDoc.shortURL);
 				} else {
-					// the cache is full
-					// TODO: the choice of the short URL to be reused can be
-					// much cleverer than it is now
-					q = db.query("select id from URLs order by nrOfAccesses asc, lastAccessed asc;");
-					nextId = q.all[0][0]["id"];
+					// the short URL does not exist already
+					couchdbDb.request("/_design/general/_view/topShortURLno", function(err, result) {
+						if(!err) { // TODO: to be managed some day...
+							if(result.rows.length == 0) 
+								topShortURLno = 0;
+							else
+								topShortURLno = result.rows[0].value;
+							if(topShortURLno == MAX_ENCODABLE_NUMBER) {
+								// all possible short URLs are taken, I need to do some garbage collection
+								// TODO: ***************************************************************************************
+							} else {
+								// cool, there still are short URLs available
+								tempDoc = {
+									fullURL: fullURL,
+									nrOfAccesses: 1,
+									lastAccessed: lastAccessed,
+									shortURLno: topShortURLno + 1,
+									shortURL: NumberToShortString(topShortURLno + 1)
+								};
+								couchdbClient.uuids(1, function(err, result) { // TODO: this shouldn't be necessary but because of issue http://j.mp/beiy0W
+									couchdbDb.saveDoc(result.uuids[0], tempDoc);
+									cb(null, tempDoc.shortURL);
+								});
+							};
+						};
+					});
 				};
 			};
-			shortURL = NumberToShortString(nextId);
-			
-			q = db.query("select shortURL from URLs where shortURL = ?", [ shortURL ]);
-			if(q.all[0].length == 0) {
-				// the short URL has not been used before
-				db.query("insert into URLs (shortURL, id, fullURL, nrOfAccesses, lastAccessed, lastUpdated) values (?, ?, ?, 0, ?, ?);", [shortURL, nextId, fullURL, lastAccessed, lastAccessed]);
-			} else {
-				// the short URL has been used before
-				db.query("update URLs set fullURL = ?, nrOfAccesses = 0, lastAccessed = ?, lastUpdated = ? where shortURL = ?;", [ fullURL, lastAccessed, lastAccessed, shortURL ]);
-			};
-		};
-		return shortURL;
+		});	
 	};
 	
-	/* Apparently I do not need to worry about race conditions, because
-	 * node-sqlite uses SQLite's serialised threading mode. */
-	var RetrieveSync = function(shortURL) {
-		var lastAccessed = (new Date()).valueOf();
-		var q = db.query("select fullURL, nrOfAccesses from URLs where shortURL = ?;", [ shortURL ]);
-		if(q.all[0].length == 0) {
-			// the short URL does not exist
-			return null;
-		};
-		db.query("update URLs set nrOfAccesses = ?, lastAccessed = ? where shortURL = ?;", [ q.all[0][0]["nrOfAccesses"] + 1, lastAccessed, shortURL ]);
-		return q.all[0][0]["fullURL"];
+	var Retrieve = function(shortURL, cb) {
+		var tempDoc, lastAccessed = (new Date()).valueOf();
+		couchdbDb.request("/_design/general/_view/fullURLs", { "key" : shortURL }, function(err, result) {
+			if(!err) // TODO: I may want to process these error sooner or later
+				if(result.rows.length > 0) {
+					// the short URL actually exists
+					tempDoc = result.rows[0].value; // there mustn't be more than one
+					// I update its properties
+					tempDoc.lastAccessed = lastAccessed;				
+					if(tempDoc.nrOfAccesses)
+						tempDoc.nrOfAccesses++;
+					else
+						tempDoc.nrOfAccesses = 1;
+					// and save it back
+					couchdbDb.saveDoc(tempDoc._id, tempDoc);
+					cb(null, tempDoc.fullURL);
+				} else {
+					// the short URL does not exist
+					cb(null, null);
+				};
+		});
 	};
 	
 	// the actual constructor instructions start here
@@ -153,8 +171,8 @@ exports.createShortener = function() {
 						callbackFunction(null, {
 							"SHORTENED_URL_LENGTH"   : function() { return SHORTENED_URL_LENGTH; }(),
 							"ALLOWED_CHARACTERS"     : function() { return ALLOWED_CHARACTERS; }(),
-							"ShortenSync"            : ShortenSync,
-							"RetrieveSync"           : RetrieveSync
+							"Shorten"            : Shorten,
+							"Retrieve"           : Retrieve
 						});
 					} else 
 						callbackFunction(new Error("The database name exists but it looks like it is not a node.ly database."));
@@ -203,7 +221,7 @@ exports.createShortener = function() {
 		// I create the file
 		/*
 		db = SQLITE3.openDatabaseSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); // TODO: this probably is not working
-		db.query("CREATE TABLE URLs(shortURL TEXT PRIMARY KEY ASC, id INTEGER, fullURL TEXT, nrOfAccesses INTEGER, lastAccessed INTEGER, lastUpdated INTEGER);");
+		db.query("CREATE TABLE URLs(shortURL TEXT PRIMARY KEY ASC, id INTEGER, fullURL TEXT, noOfAccesses INTEGER, lastAccessed INTEGER, lastUpdated INTEGER);");
 		db.query("CREATE TABLE Meta (json TEXT);");
 		db.query("INSERT INTO Meta (json) VALUES (?)", [JSON.stringify({
 			"ALLOWED_CHARACTERS"   : ALLOWED_CHARACTERS,

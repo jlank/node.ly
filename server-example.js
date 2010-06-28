@@ -18,39 +18,61 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+require("./com_giacecco_tools").Crockford();
+
 // Starts a basic web site to access the shortener on port 8000,
 // unless a different HTTP port is specified. Returns the port
 // number.
 var CreateServer = function(shortener, port) {
+	
+	var SplashPage = function(response, matches) {
+		response.writeHead(200, {'Content-Type': 'text/html; charset=UTF-8'});
+		response.end(require("fs").readFileSync("server-example.html"));
+	};
+
+	var RetrieveFullURL = function(response, matches) {
+		shortURL = unescape(matches[1]);
+		shortener.Retrieve(shortURL, function(err, fullURL) { // TODO: how is that possible that I need to explicitly unescape this?
+			if(!err && fullURL) {
+				// The short URL exists and I can do the redirect
+				// There is a very interesting article about the choice of		                                                                             
+				// the actual HTTP return code at 
+				// http://www.google.com/buzz/dclinton/JKoWPTAAyvw/More-thoughts-on-URL-shorteners-This-post-explores
+				response.writeHead(302, { 
+					'Content-Type': 'text/plain', 
+					'Location' : fullURL 
+				});
+				response.end();
+			} else 
+				// The short URL does not exist and I redirect the user to the 
+				// generic splash page
+				SplashPage(response, matches);
+		});
+	};
+	
+	var ShortenURL = function(response, matches) {
+		shortener.Shorten(unescape(matches[1]), function(err, shortURL) { // TODO: how is that possible that I need to explicitly unescape this?
+			if(!err) {
+				response.writeHead(200, {'Content-Type': 'text/plain'});
+				response.end(shortURL);					
+			};
+		});
+	};
+	
 	var HTTP = require('http');
 	port = port || 8000;
 	HTTP.createServer(function (request, response) {
 		require("./com_giacecco_tools").SwitchRegExp(require('url').parse(request.url)['href'], [
 
             // The web browser is requesting to resolve a short URL.
-			[ new RegExp("^\/(.{" + shortener.SHORTENED_URL_LENGTH + "})$") , function(matches) { 
-				// There is a very interesting article about the choice of		                                                                             
-				// the actual HTTP return code at 
-				// http://www.google.com/buzz/dclinton/JKoWPTAAyvw/More-thoughts-on-URL-shorteners-This-post-explores
-				response.writeHead(302, { 
-					'Content-Type': 'text/plain', 
-					'Location' : shortener.RetrieveSync(matches[1]) // careful here, matches[0] is the whole URL, not the parenthesised expressions!
-				});
-				response.end();
-			}],
+			[ new RegExp("^\/(.{" + shortener.SHORTENED_URL_LENGTH + "})$") , RetrieveFullURL.curry(response) ],
 
 			// This is the shortest form to request node.ly to shorten an 
 			// URL, to be used as if it was an API 
-			[ /^\/shorten\?URL=(.*)$/ , function(matches) {
-				response.writeHead(200, {'Content-Type': 'text/plain'});
-				response.end(shortener.ShortenSync(matches[1]));						
-			}], 
+			[ /^\/shorten\?URL=(.*)$/ , ShortenURL.curry(response) ], 
 
 			// everything else
-			[ /^\/.*/ , function() {
-				response.writeHead(200, {'Content-Type': 'text/html; charset=UTF-8'});
-				response.end(require("fs").readFileSync("server-example.html"));
-			}]
+			[ /^\/.*/ , SplashPage.curry(response) ]
 			
 		]);
 	}).listen(port);
@@ -62,6 +84,7 @@ var LY_NODE = new require("./ly_node_common");
 var databaseName = "test";
 LY_NODE.databaseExists(undefined, undefined, databaseName, 
 	function(err, dbExists) {
+		// this thing below is very ugly
 		if(dbExists) {
 			LY_NODE.createShortener(undefined, undefined, "test",
 									function(err, s) { 
