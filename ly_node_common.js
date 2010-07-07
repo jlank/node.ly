@@ -153,18 +153,22 @@ exports.createShortener = function() {
 	couchdbClient = COUCHDB.createClient(arguments[3] || 5984, arguments[2] || "localhost");
 	switch(arguments.length) {
 	
-	case 4: // the user's trying to refer to an existing database
+	case 2: // the user's trying to open an existing database
 
-		callbackFunction = arguments[3];
+		callbackFunction = arguments[1];
 
-		couchdbDb = couchdbClient.db(arguments[2] + require("./ly_node_common").NODE_LY_DATABASE_EXTENSION);
+		couchdbDb = couchdbClient.db(arguments[0] + require("./ly_node_common").NODE_LY_DATABASE_EXTENSION);
 		couchdbDb.exists(function(err, dbExists) {
-			if(!dbExists) 
+			if(err)
+				throw err;
+			else if(!dbExists) 
 				callbackFunction(new Error("You are trying to open a node.ly database that does not exist."));
 			else {
 				// the file exists, I read it
 				couchdbDb.getDoc("Meta", function(err, doc) {
-					if(!err) {
+					if(err) 
+						callbackFunction(new Error("The database name exists but it looks like it is not a node.ly database."));
+					else {
 						ALLOWED_CHARACTERS = doc["ALLOWED_CHARACTERS"];
 						SHORTENED_URL_LENGTH = doc["SHORTENED_URL_LENGTH"];
 						MAX_ENCODABLE_NUMBER = Math.pow(ALLOWED_CHARACTERS.length, SHORTENED_URL_LENGTH);
@@ -174,13 +178,13 @@ exports.createShortener = function() {
 							"Shorten"            : Shorten,
 							"Retrieve"           : Retrieve
 						});
-					} else 
-						callbackFunction(new Error("The database name exists but it looks like it is not a node.ly database."));
+					}
 				});
 			}});
 		break;
-		
-	case 6: // the user's trying to create a new database
+	
+	// TODO: this is completely outdated, and must become a 'createDatabase' function
+	case 4: // the user's trying to create a new database
 
 		callbackFunction = arguments[5];
 
@@ -217,17 +221,6 @@ exports.createShortener = function() {
 				});
 			};
 		});
-		
-		// I create the file
-		/*
-		db = SQLITE3.openDatabaseSync(arguments[2] + require("./ly_node_common").NODE_LY_FILE_EXTENSION); // TODO: this probably is not working
-		db.query("CREATE TABLE URLs(shortURL TEXT PRIMARY KEY ASC, id INTEGER, fullURL TEXT, noOfAccesses INTEGER, lastAccessed INTEGER, lastUpdated INTEGER);");
-		db.query("CREATE TABLE Meta (json TEXT);");
-		db.query("INSERT INTO Meta (json) VALUES (?)", [JSON.stringify({
-			"ALLOWED_CHARACTERS"   : ALLOWED_CHARACTERS,
-			"SHORTENED_URL_LENGTH" : SHORTENED_URL_LENGTH
-		})]);
-		*/
 		break;
 		
 	default: // wrong number of parameters in the constructor

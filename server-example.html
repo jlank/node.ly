@@ -10,6 +10,7 @@
 		xmlhttp = new XMLHttpRequest();
 		xmlhttp.onreadystatechange = function() {
 			if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+				// TODO: this regexp below does not work if I use the ip address!!!
 				var shortURL = ('' + self.location).match(/^[A-Za-z]+\:\/\/[A-Za-z]+(?:\:\d+)/)[0] + "/" + xmlhttp.responseText;
 				document.getElementById("shortURL").innerHTML = "Your short URL is: <a href=\"" + shortURL + "\">" + shortURL + "</a>.";
 			};

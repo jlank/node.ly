@@ -83,8 +83,8 @@ exports.BaseConversion = function(baseSymbols) {
 /* Similar to switch-case, but matching a string against a series of regular
  * expressions, and without a 'default' clause. */
 exports.SwitchRegExp = function(stringToBeMatched, arrayOfInstructions) {
-	var matching;
-	for(var i in arrayOfInstructions) {
+	var i, matching;
+	for(i in arrayOfInstructions) {
 		if(matching = stringToBeMatched.match(arrayOfInstructions[i][0])) {
 			arrayOfInstructions[i][1](matching);
 			break;

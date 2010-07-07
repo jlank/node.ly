@@ -43,10 +43,11 @@ var CreateServer = function(shortener, port) {
 					'Location' : fullURL 
 				});
 				response.end();
-			} else 
-				// The short URL does not exist and I redirect the user to the 
-				// generic splash page
-				SplashPage(response, matches);
+				return;
+			};
+			// The short URL does not exist and I redirect the user to the 
+			// generic splash page
+			SplashPage(response, matches);
 		});
 	};
 	
@@ -59,10 +60,12 @@ var CreateServer = function(shortener, port) {
 		});
 	};
 	
-	var HTTP = require('http');
+	var HTTP = require('http'),
+		COM_GIACECCO_COM = require("./com_giacecco_tools"),
+		myServer;
 	port = port || 8000;
-	HTTP.createServer(function (request, response) {
-		require("./com_giacecco_tools").SwitchRegExp(require('url').parse(request.url)['href'], [
+	myServer = HTTP.createServer(function (request, response) {
+		COM_GIACECCO_COM.SwitchRegExp(require('url').parse(request.url)['href'], [
 
             // The web browser is requesting to resolve a short URL.
 			[ new RegExp("^\/(.{" + shortener.SHORTENED_URL_LENGTH + "})$") , RetrieveFullURL.curry(response) ],
@@ -75,32 +78,25 @@ var CreateServer = function(shortener, port) {
 			[ /^\/.*/ , SplashPage.curry(response) ]
 			
 		]);
-	}).listen(port);
+	});
+	// TODO: I should check that myServer has been instantiated correctly here
+	// myServer.addListener('error', function (e) { SYS.puts("error %s", e.message); });
+	myServer.listen(port);
 	return port;
 };
 
-var SYS = require("sys");
-var LY_NODE = new require("./ly_node_common"); 
-var databaseName = "test";
-LY_NODE.databaseExists(undefined, undefined, databaseName, 
-	function(err, dbExists) {
-		// this thing below is very ugly
-		if(dbExists) {
-			LY_NODE.createShortener(undefined, undefined, "test",
-									function(err, s) { 
-										if(err) 
-											throw err;
-										else 
-											SYS.puts("Starting server on port " + CreateServer(s, 8000) + "...");
-									});
-		} else {
-			LY_NODE.createShortener(4, LY_NODE.RFC_ALLOWED_CHARACTERS, 
-									undefined, undefined, "test", 
-									function(err, s) { 
-										if(err) 
-											throw err;
-										else 
-											SYS.puts("Starting server on port " + CreateServer(s, 8000) + "...");
-									});
-		};
-	});
+
+var SYS = require("sys"),
+	LY_NODE = new require("./ly_node_common"),
+	databaseName = "test";
+LY_NODE.databaseExists(undefined, undefined, databaseName, function(err, dbExists) {
+	if(!err) {
+// TODO: you have to write this
+//		if(!dbExists) 
+//			LY_NODE.createDatabase(4, LY_NODE.RFC_ALLOWED_CHARACTERS, ...);
+		LY_NODE.createShortener("test", function(err, s) { 
+			if(!err) 	
+				SYS.puts("Starting server on port " + CreateServer(s, 8000) + "...");
+		});
+	};
+});
