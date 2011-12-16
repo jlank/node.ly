@@ -18,7 +18,7 @@
  */
 
 var LY_NODE_SHORTENER = new require("./ly_node_common"); 
-var SYS = require("sys");
+var SYS = require("util");
 
 var GenerateRandomString = function(stringLength, allowedCharacters) {
 	for(var result = ""; result.length < stringLength; result += allowedCharacters[Math.floor(Math.random() * allowedCharacters.length)]) {};

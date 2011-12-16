@@ -57,7 +57,7 @@ var CreateServer = function(shortener, port) {
 	return port;
 };
 
-var SYS = require("sys");
+var SYS = require("util");
 var LY_NODE_SHORTENER = new require("./ly_node_common"); 
 var shortener, databaseName = "test";
 if(!require("./com_giacecco_tools").FileExistsSync(databaseName + LY_NODE_SHORTENER.NODE_LY_FILE_EXTENSION))

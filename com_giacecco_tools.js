@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var SYS = require("sys"), FILESYS = require("fs");
+var SYS = require("util"), FILESYS = require("fs");
 
 exports.FileExistsSync = function(filename) {
 	var fileExists = true;
